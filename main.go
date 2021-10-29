@@ -34,6 +34,7 @@ func main() {
 		Config: aws.Config{
 			Region:                        aws.String(region),
 			CredentialsChainVerboseErrors: aws.Bool(true),
+			LogLevel:                      aws.LogLevel(aws.LogDebug),
 		},
 		SharedConfigState: session.SharedConfigEnable,
 	}))
