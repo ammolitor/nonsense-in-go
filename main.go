@@ -22,7 +22,7 @@ func GetObjects(c context.Context, api S3ListObjectsAPI, input *s3.ListObjectsV2
 func main() {
 		bucket := aws.String("artifacts-034006644693-us-west-2")
 
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithClientLogMode(aws.LogRetries | aws.LogRequest))
 	if err != nil {
 		panic("configuration error, " + err.Error())
 	}
