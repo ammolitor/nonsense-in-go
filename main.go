@@ -1,53 +1,55 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 
-	"encoding/json"
-	"log"
-	"os"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+type S3ListObjectsAPI interface {
+	ListObjectsV2(ctx context.Context,
+		params *s3.ListObjectsV2Input,
+		optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+}
+
+func GetObjects(c context.Context, api S3ListObjectsAPI, input *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+	return api.ListObjectsV2(c, input)
+}
+
 func main() {
-	const (
-		functionName = "ebs_dashboard"
-		region       = "us-west-2"
-		namespace    = "aaronm"
-	)
+		bucket := aws.String("artifacts-034006644693-us-west-2")
 
-	type lambdaPayload struct {
-		Namespace string `json:"namespace"`
-	}
-
-	request := lambdaPayload{Namespace: namespace}
-
-	payload, err := json.Marshal(request)
+	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		log.Println("Error marshaling request")
-		os.Exit(1)
+		panic("configuration error, " + err.Error())
 	}
 
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config: aws.Config{
-			Region:                        aws.String(region),
-			CredentialsChainVerboseErrors: aws.Bool(true),
-			LogLevel:                      aws.LogLevel(aws.LogDebug),
-		},
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	_, sessionError := sess.Config.Credentials.Get()
-	if sessionError != nil {
-		log.Print(sessionError)
-	}
-	client := lambda.New(sess)
+	client := s3.NewFromConfig(cfg)
 
-	_, err = client.Invoke(&lambda.InvokeInput{FunctionName: aws.String(functionName), Payload: payload})
+	input := &s3.ListObjectsV2Input{
+		Bucket: bucket,
+	}
+
+	resp, err := GetObjects(context.TODO(), client, input)
 	if err != nil {
-		log.Printf("Error calling %s\n error=%s", functionName, err.Error())
+		fmt.Println("Got error retrieving list of objects:")
+		fmt.Println(err)
+		return
 	}
-	var dashboardURL = "https://" + region + ".console.aws.amazon.com/cloudwatch/home?region=" + region + "#dashboards:name=" + namespace + ";start=PT1H"
-	fmt.Printf(dashboardURL)
+
+	fmt.Println("Objects in " + *bucket + ":")
+
+	for _, item := range resp.Contents {
+		fmt.Println("Name:          ", *item.Key)
+		fmt.Println("Last modified: ", *item.LastModified)
+		fmt.Println("Size:          ", item.Size)
+		fmt.Println("Storage class: ", item.StorageClass)
+		fmt.Println("")
+	}
+
+	fmt.Println("Found", len(resp.Contents), "items in bucket", *bucket)
+	fmt.Println("")
 }
